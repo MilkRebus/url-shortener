@@ -1,0 +1,11 @@
+.git
+.github
+.vscode
+.idea
+.env
+.DS_Store
+shortener
+*.out
+*.test
+coverage.out
+README.md

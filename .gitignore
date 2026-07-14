@@ -1,0 +1,15 @@
+.env
+.env.local
+
+/shortener
+*.exe
+*.out
+*.test
+
+.DS_Store
+
+.vscode/
+.idea/
+
+coverage.out
+coverage.html
