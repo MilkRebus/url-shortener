@@ -102,7 +102,7 @@ APP_ADDR=:8080
 BASE_URL=http://localhost:8080
 DATABASE_URL=postgres://shortener:shortener@postgres:5432/shortener?sslmode=disable
 DB_MAX_CONNS=10
-DB_MIN_CONNS=2
+DB_MIN_CONNS=1
 ```
 
 ## Создание короткой ссылки
