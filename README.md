@@ -1,92 +1,46 @@
 # URL Shortener
 
-Сервис сокращения ссылок на Go. Для одного оригинального URL всегда возвращается одна сокращённая ссылка. Короткий код состоит ровно из 10 символов: `a-z`, `A-Z`, `0-9` и `_`.
+Небольшой сервис для сокращения ссылок, написанный на Go.
 
-## Возможности
+Сервис принимает обычный URL, сохраняет его и возвращает короткую ссылку с кодом длиной 10 символов.
 
-- `POST /api/v1/links` — создать или получить короткую ссылку.
-- `GET /api/v1/links/{code}` — получить оригинальный URL в JSON.
-- `GET /{code}` — перенаправиться на оригинальный URL через `302 Found`.
-- Два хранилища: потокобезопасное in-memory и PostgreSQL.
-- Выбор хранилища параметром запуска или переменной окружения.
-- Генерация кодов через `crypto/rand` с равномерным выбором символов.
-- Атомарная обработка одинаковых URL и коллизий кодов.
-- Health checks, таймауты HTTP-сервера и graceful shutdown.
-- Docker-образ и масштабируемый Docker Compose с тремя репликами приложения и Nginx.
-- Unit-тесты и конкурентные тесты.
+Для одного и того же URL всегда возвращается один и тот же короткий код.
 
-## Архитектура
+## Что реализовано
+
+- создание короткой ссылки через POST-запрос;
+- получение оригинального URL по короткому коду;
+- перенаправление по короткой ссылке;
+- хранение данных в памяти;
+- хранение данных в PostgreSQL;
+- выбор хранилища при запуске;
+- Dockerfile и Docker Compose;
+- запуск нескольких экземпляров приложения через Nginx;
+- unit-тесты.
+
+## Запуск с хранением в памяти
+
+Сначала нужно скачать зависимости:
+
+```bash
+go mod download
+```
+
+Запуск:
+
+```bash
+go run ./cmd/shortener -storage=memory
+```
+
+После запуска сервис будет доступен по адресу:
 
 ```text
-Client
-  |
-Nginx
-  |---- app1 ----|
-  |---- app2 ----|---- PostgreSQL
-  |---- app3 ----|
+http://localhost:8080
 ```
 
-Приложение stateless в PostgreSQL-режиме: любой контейнер может обработать любой запрос. Уникальность кода и оригинального URL гарантируется ограничениями PostgreSQL. In-memory режим предназначен для локального запуска, тестирования и одной реплики.
+Данные в этом режиме хранятся только в памяти и пропадут после остановки программы.
 
-## Структура проекта
-
-```text
-.
-├── cmd/shortener/main.go
-├── internal/
-│   ├── config/
-│   ├── generator/
-│   ├── service/
-│   ├── storage/
-│   │   ├── memory/
-│   │   └── postgres/
-│   └── transport/httpapi/
-├── migrations/001_create_links.sql
-├── deploy/nginx/nginx.conf
-├── Dockerfile
-├── docker-compose.yml
-└── Makefile
-```
-
-## Требования
-
-- Go 1.25 или новее.
-- Docker и Docker Compose для контейнерного запуска.
-- PostgreSQL для режима `postgres`.
-
-После клонирования загрузите зависимости:
-
-```bash
-go mod tidy
-```
-
-## Локальный запуск с in-memory хранилищем
-
-```bash
-go run ./cmd/shortener -storage=memory -addr=:8080 -base-url=http://localhost:8080
-```
-
-Аналогично через переменные окружения:
-
-```bash
-STORAGE_TYPE=memory APP_ADDR=:8080 BASE_URL=http://localhost:8080 go run ./cmd/shortener
-```
-
-Данные in-memory хранилища теряются после завершения процесса.
-
-## Запуск с PostgreSQL
-
-Сначала примените миграцию `migrations/001_create_links.sql`, затем запустите сервис:
-
-```bash
-go run ./cmd/shortener \
-  -storage=postgres \
-  -database-url='postgres://shortener:shortener@localhost:5432/shortener?sslmode=disable' \
-  -addr=:8080 \
-  -base-url=http://localhost:8080
-```
-
-## Масштабируемый запуск через Docker Compose
+## Запуск через Docker Compose
 
 ```bash
 docker compose up --build
@@ -95,10 +49,14 @@ docker compose up --build
 Будут запущены:
 
 - PostgreSQL;
-- три одинаковых контейнера приложения;
-- Nginx, распределяющий запросы между контейнерами.
+- три контейнера приложения;
+- Nginx для распределения запросов.
 
-Сервис будет доступен на `http://localhost:8080`.
+Сервис будет доступен по адресу:
+
+```text
+http://localhost:8080
+```
 
 Остановка:
 
@@ -106,28 +64,23 @@ docker compose up --build
 docker compose down
 ```
 
-Удаление базы и повторное применение init-миграции:
+Если нужно удалить также данные PostgreSQL:
 
 ```bash
 docker compose down -v
 ```
 
-## API
+## Создание короткой ссылки
 
-### Создание короткой ссылки
+Запрос:
 
-```http
-POST /api/v1/links
-Content-Type: application/json
+```bash
+curl -i -X POST http://localhost:8080/api/v1/links \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/some/long/path"}'
 ```
 
-```json
-{
-  "url": "https://example.com/very/long/path"
-}
-```
-
-Новая ссылка возвращается со статусом `201 Created`:
+Пример ответа:
 
 ```json
 {
@@ -136,142 +89,115 @@ Content-Type: application/json
 }
 ```
 
-Если URL уже существует, возвращается тот же код и статус `200 OK`.
+Если отправить тот же URL ещё раз, сервис вернёт тот же код.
 
-Пример с `curl`:
-
-```bash
-curl -i -X POST http://localhost:8080/api/v1/links \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://example.com/very/long/path"}'
-```
-
-### Получение оригинального URL
+## Получение оригинального URL
 
 ```bash
 curl http://localhost:8080/api/v1/links/aB3_q9ZxK2
 ```
 
+Пример ответа:
+
 ```json
 {
-  "url": "https://example.com/very/long/path"
+  "url": "https://example.com/some/long/path"
 }
 ```
 
-### Перенаправление
+## Перенаправление
+
+Можно открыть короткую ссылку в браузере:
+
+```text
+http://localhost:8080/aB3_q9ZxK2
+```
+
+Сервис перенаправит на оригинальный URL.
+
+## Проверка состояния
 
 ```bash
-curl -i http://localhost:8080/aB3_q9ZxK2
+curl http://localhost:8080/health/live
 ```
-
-Ответ содержит статус `302 Found` и заголовок `Location`.
-
-### Health checks
-
-```text
-GET /health/live
-GET /health/ready
-```
-
-`live` проверяет, что процесс работает. `ready` в PostgreSQL-режиме дополнительно проверяет доступность базы.
-
-## Генерация короткого кода
-
-Алфавит содержит 63 символа:
-
-```text
-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_
-```
-
-Код создаётся из 10 криптографически случайных символов. Для исключения смещения распределения байты `252-255` отбрасываются, потому что `252` делится на `63` без остатка.
-
-Уникальность не полагается только на вероятность:
-
-1. сервис генерирует код;
-2. хранилище атомарно пытается сохранить его;
-3. при конфликте кода сервис генерирует новый;
-4. число попыток ограничено параметром `GENERATION_ATTEMPTS`.
-
-## Конкурентность
-
-### In-memory
-
-Хранилище использует две map и `sync.RWMutex`:
-
-```text
-code -> original URL
-original URL -> code
-```
-
-Проверка существующего URL, проверка коллизии и запись выполняются под одной write-блокировкой.
-
-### PostgreSQL
-
-Таблица содержит:
-
-```sql
-PRIMARY KEY (code)
-UNIQUE (original_url)
-```
-
-Сначала выполняется `INSERT ... ON CONFLICT DO NOTHING RETURNING ...`. Если запись не вставлена, сервис проверяет существующий URL. Если URL отсутствует, конфликт произошёл по короткому коду и генерация повторяется.
-
-Такая схема корректна при одновременной работе нескольких контейнеров и не требует распределённого mutex.
-
-## Конфигурация
-
-| Переменная | По умолчанию | Описание |
-|---|---:|---|
-| `APP_ADDR` | `:8080` | Адрес HTTP-сервера |
-| `BASE_URL` | `http://localhost:8080` | Публичный адрес коротких ссылок |
-| `STORAGE_TYPE` | `memory` | `memory` или `postgres` |
-| `DATABASE_URL` | пусто | Строка подключения PostgreSQL |
-| `DB_MAX_CONNS` | `10` | Максимум соединений на контейнер |
-| `DB_MIN_CONNS` | `1` | Минимум соединений на контейнер |
-| `GENERATION_ATTEMPTS` | `10` | Максимум попыток при коллизиях |
-| `READ_HEADER_TIMEOUT` | `5s` | Таймаут заголовков |
-| `READ_TIMEOUT` | `10s` | Таймаут чтения запроса |
-| `WRITE_TIMEOUT` | `10s` | Таймаут ответа |
-| `IDLE_TIMEOUT` | `60s` | Таймаут keep-alive соединения |
-| `SHUTDOWN_TIMEOUT` | `10s` | Время graceful shutdown |
-
-Все основные параметры также доступны как CLI-флаги:
 
 ```bash
-go run ./cmd/shortener -h
+curl http://localhost:8080/health/ready
 ```
 
 ## Тесты
+
+Запуск всех тестов:
 
 ```bash
 go test ./...
 ```
 
-Проверка гонок:
+Проверка гонок данных:
 
 ```bash
 go test -race ./...
 ```
 
-Дополнительно:
+Дополнительная проверка:
 
 ```bash
 go vet ./...
 ```
 
-Тестами покрыты:
+## Хранилища
 
-- формат и ошибки генератора;
-- in-memory хранилище и параллельное создание одного URL;
-- повторная генерация после коллизии;
-- PostgreSQL-логика через подменяемый интерфейс базы;
-- HTTP-обработчики, статусы, JSON, redirect и readiness;
-- конфигурация.
+Поддерживаются два режима:
 
-## Основные решения и ограничения
+```text
+memory
+postgres
+```
 
-- URL сравниваются как строки после удаления пробелов по краям. `https://example.com` и `https://example.com/` считаются разными URL.
-- Поддерживаются только абсолютные URL со схемой `http` или `https`.
-- In-memory хранилище не подходит для нескольких реплик и не сохраняет данные после рестарта.
-- Docker Compose использует PostgreSQL init-скрипт для демонстрации. В production миграции следует запускать отдельным migration job.
-- Для дальнейшего роста можно добавить Redis-кэш, rate limiting, срок жизни ссылок, аналитику через очередь и реплики PostgreSQL.
+`memory` подходит для локального запуска и тестов.
+
+`postgres` используется в Docker Compose и подходит для запуска нескольких экземпляров приложения, так как все контейнеры работают с одной базой.
+
+## Короткие коды
+
+Код состоит ровно из 10 символов.
+
+Используются:
+
+```text
+a-z
+A-Z
+0-9
+_
+```
+
+Коды генерируются через `crypto/rand`.
+
+Уникальность дополнительно проверяется хранилищем. Если код уже занят, сервис генерирует новый.
+
+## Структура проекта
+
+```text
+cmd/shortener              точка запуска приложения
+internal/config            чтение настроек
+internal/generator         генерация коротких кодов
+internal/service           основная логика
+internal/storage/memory    хранение в памяти
+internal/storage/postgres  хранение в PostgreSQL
+internal/transport/httpapi HTTP-обработчики
+migrations                 SQL-миграция
+deploy/nginx               конфигурация Nginx
+```
+
+## Примечания
+
+Сервис принимает только URL со схемой `http` или `https`.
+
+URL сравниваются как строки после удаления пробелов по краям. Поэтому эти адреса считаются разными:
+
+```text
+https://example.com
+https://example.com/
+```
+
+SQL-миграция из папки `migrations` автоматически применяется при первом создании PostgreSQL-контейнера.
