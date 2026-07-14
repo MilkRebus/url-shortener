@@ -99,8 +99,10 @@ func validateURL(rawURL string) (string, error) {
 		return "", ErrInvalidURL
 	}
 
-	parsed, err := url.ParseRequestURI(rawURL)
-	if err != nil || parsed.Host == "" ||
+	parsed, err := url.Parse(rawURL)
+	if err != nil ||
+		!parsed.IsAbs() ||
+		parsed.Host == "" ||
 		(parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", ErrInvalidURL
 	}

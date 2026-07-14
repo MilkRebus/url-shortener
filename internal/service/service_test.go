@@ -161,6 +161,36 @@ func TestCreateRejectsInvalidURL(t *testing.T) {
 	}
 }
 
+func TestCreatePreservesURLFragment(t *testing.T) {
+	store := memory.New()
+
+	svc, err := New(
+		store,
+		&sequenceGenerator{codes: []string{"aaaaaaaaaa"}},
+		"http://localhost:8080",
+		10,
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result, err := svc.Create(
+		context.Background(),
+		"https://example.com/page#contacts",
+	)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if result.Link.OriginalURL != "https://example.com/page#contacts" {
+		t.Fatalf(
+			"stored URL = %q, want %q",
+			result.Link.OriginalURL,
+			"https://example.com/page#contacts",
+		)
+	}
+}
+
 func TestGetRejectsInvalidCode(t *testing.T) {
 	svc, err := New(memory.New(), &sequenceGenerator{codes: []string{"aaaaaaaaaa"}}, "http://localhost:8080", 10)
 	if err != nil {
