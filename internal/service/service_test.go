@@ -74,6 +74,62 @@ func TestCreateSameURLReturnsSameCode(t *testing.T) {
 	}
 }
 
+func TestCreateRootURLWithAndWithoutSlashReturnsSameCode(t *testing.T) {
+	store := memory.New()
+	codeGenerator := &sequenceGenerator{
+		codes: []string{"aaaaaaaaaa", "bbbbbbbbbb"},
+	}
+
+	svc, err := New(
+		store,
+		codeGenerator,
+		"http://localhost:8080",
+		10,
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	first, err := svc.Create(
+		context.Background(),
+		"https://example.com",
+	)
+	if err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+
+	second, err := svc.Create(
+		context.Background(),
+		"https://example.com/",
+	)
+	if err != nil {
+		t.Fatalf("second Create() error = %v", err)
+	}
+
+	if !first.Created {
+		t.Fatal("first Create() created = false, want true")
+	}
+
+	if second.Created {
+		t.Fatal("second Create() created = true, want false")
+	}
+
+	if second.Link.Code != first.Link.Code {
+		t.Fatalf(
+			"second code = %q, want %q",
+			second.Link.Code,
+			first.Link.Code,
+		)
+	}
+
+	if first.Link.OriginalURL != "https://example.com/" {
+		t.Fatalf(
+			"stored URL = %q, want https://example.com/",
+			first.Link.OriginalURL,
+		)
+	}
+}
+
 func TestCreateRetriesAfterCollision(t *testing.T) {
 	store := memory.New()
 	_, _, err := store.CreateOrGet(context.Background(), "https://occupied.example", "aaaaaaaaaa")

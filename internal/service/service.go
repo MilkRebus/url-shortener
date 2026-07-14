@@ -98,9 +98,16 @@ func validateURL(rawURL string) (string, error) {
 	if rawURL == "" || len(rawURL) > 8192 {
 		return "", ErrInvalidURL
 	}
+
 	parsed, err := url.ParseRequestURI(rawURL)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+	if err != nil || parsed.Host == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return "", ErrInvalidURL
 	}
-	return rawURL, nil
+
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+
+	return parsed.String(), nil
 }
